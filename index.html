@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Snake vs AI 🐍🤖</title>
+  <meta name="theme-color" content="#1D9E75">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Snake AI">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html, body { height: 100%; overflow: hidden; background: #0f1923; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; display: flex; justify-content: center; align-items: flex-start; }
+    #gc { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 10px 0 14px; width: 100%; max-width: 420px; }
+    h1 { font-size: 16px; color: #e0e0e0; letter-spacing: 1px; }
+    .sboard { display: flex; gap: 8px; }
+    .sc { border-radius: 10px; padding: 5px 18px; text-align: center; font-size: 12px; }
+    .sc .v { font-size: 20px; font-weight: 600; }
+    .p1c { background: #0d3d2e; color: #4ecca3; border: 1px solid #1D9E75; }
+    .rndc { background: #1a1a2e; color: #888; border: 1px solid #333; }
+    .aic { background: #3d2500; color: #f5a623; border: 1px solid #EF9F27; }
+    canvas { border-radius: 12px; display: block; box-shadow: 0 0 30px rgba(29,158,117,0.15); }
+    #msg { font-size: 12px; color: #666; text-align: center; }
+    #hint { font-size: 11px; color: #444; text-align: center; }
+    .btn-row { display: flex; gap: 8px; }
+    button { padding: 8px 20px; border-radius: 10px; border: 1px solid #333; background: #1a1a2e; color: #ccc; font-size: 13px; cursor: pointer; user-select: none; -webkit-user-select: none; }
+    button:active { transform: scale(0.95); background: #252540; }
+    .dpad-wrap { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    .dpad-label { font-size: 11px; font-weight: 600; color: #4ecca3; margin-bottom: 2px; }
+    .dpad { display: grid; grid-template-columns: repeat(3, 60px); grid-template-rows: repeat(3, 60px); gap: 5px; }
+    .dpad button { width: 60px; height: 60px; padding: 0; font-size: 26px; display: flex; align-items: center; justify-content: center; border-radius: 12px; background: #0d3d2e; border: 1px solid #1D9E75; color: #4ecca3; }
+    .dpad button:active { background: #1D9E75; color: #fff; }
+    .empty { visibility: hidden; }
+  </style>
+</head>
+<body>
+<div id="gc">
+  <h1>🐍 SNAKE vs AI 🤖</h1>
+  <div class="sboard">
+    <div class="sc p1c"><div>🟢 Tum</div><div class="v" id="s1">0</div></div>
+    <div class="sc rndc"><div style="font-size:10px;">ROUND</div><div class="v" id="rnd">1</div></div>
+    <div class="sc aic"><div>🤖 AI</div><div class="v" id="s2">0</div></div>
+  </div>
+  <canvas id="game-canvas"></canvas>
+  <div id="msg">Start dabao!</div>
+  <div id="hint">Wall se guzar sakte ho — sirf collision se out!</div>
+  <div class="btn-row">
+    <button id="startBtn">▶ Start</button>
+    <button id="pauseBtn" disabled>⏸ Pause</button>
+  </div>
+  <div class="dpad-wrap">
+    <div class="dpad-label">🟢 TUMHARA CONTROL</div>
+    <div class="dpad">
+      <div class="empty"></div>
+      <button id="up">↑</button>
+      <div class="empty"></div>
+      <button id="left">←</button>
+      <div class="empty"></div>
+      <button id="right">→</button>
+      <div class="empty"></div>
+      <button id="down">↓</button>
+      <div class="empty"></div>
+    </div>
+  </div>
+</div>
+<script>
+  const canvas = document.getElementById('game-canvas');
+  const ctx = canvas.getContext('2d');
+  const CS = 20;
+  const COLS = Math.floor(Math.min(window.innerWidth - 20, 340) / CS);
+  const ROWS = COLS;
+  canvas.width = COLS * CS;
+  canvas.height = ROWS * CS;
+  let s1, s2, d1, d2, food, sc1, sc2, rnd, speed, loop, paused, started, nd1;
+  function wrap(p) { return { x: ((p.x % COLS) + COLS) % COLS, y: ((p.y % ROWS) + ROWS) % ROWS }; }
+  function init() {
+    const mid = Math.floor(ROWS / 2);
+    s1 = [{ x: 3, y: mid }, { x: 2, y: mid }, { x: 1, y: mid }];
+    s2 = [{ x: COLS-4, y: mid }, { x: COLS-3, y: mid }, { x: COLS-2, y: mid }];
+    d1 = { x: 1, y: 0 }; d2 = { x: -1, y: 0 }; nd1 = null; speed = 280; placeFood();
+  }
+  function initGame() { sc1 = 0; sc2 = 0; rnd = 1; init(); updateUI(); }
+  function placeFood() {
+    let pos, tries = 0;
+    do { pos = { x: Math.floor(Math.random() * COLS), y: Math.floor(Math.random() * ROWS) }; tries++; }
+    while (tries < 300 && [...s1, ...s2].some(s => s.x === pos.x && s.y === pos.y));
+    food = pos;
+  }
+  function updateUI() {
+    document.getElementById('s1').textContent = sc1;
+    document.getElementById('s2').textContent = sc2;
+    document.getElementById('rnd').textContent = rnd;
+  }
+  function bfs(start, target, blocked) {
+    const key = p => p.x + ',' + p.y;
+    const visited = new Set([key(start)]);
+    const queue = [{ pos: start, path: [] }];
+    const dirs = [{ x: 0, y: -1 }, { x: 0, y: 1 }, { x: -1, y: 0 }, { x: 1, y: 0 }];
+    while (queue.length) {
+      const { pos, path } = queue.shift();
+      for (const d of dirs) {
+        const next = wrap({ x: pos.x + d.x, y: pos.y + d.y });
+        const k = key(next);
+        if (blocked.has(k) || visited.has(k)) continue;
+        visited.add(k);
+        const newPath = [...path, d];
+        if (next.x === target.x && next.y === target.y) return newPath;
+        queue.push({ pos: next, path: newPath });
+      }
+    }
+    return null;
+  }
+  function floodCount(start, blocked, limit) {
+    const visited = new Set([start.x + ',' + start.y]);
+    const queue = [start];
+    let count = 0;
+    while (queue.length && count < limit) {
+      const p = queue.shift(); count++;
+      for (const dd of [{ x: 0, y: -1 }, { x: 0, y: 1 }, { x: -1, y: 0 }, { x: 1, y: 0 }]) {
+        const nx = wrap({ x: p.x + dd.x, y: p.y + dd.y });
+        const k = nx.x + ',' + nx.y;
+        if (blocked.has(k) || visited.has(k)) continue;
+        visited.add(k); queue.push(nx);
+      }
+    }
+    return count;
+  }
+  function aiMove() {
+    const blocked = new Set();
+    s1.forEach(s => blocked.add(s.x + ',' + s.y));
+    s2.slice(0, -1).forEach(s => blocked.add(s.x + ',' + s.y));
+    const head = s2[0];
+    let path = bfs(head, food, blocked);
+    if (path && path.length > 0) { d2 = path[0]; }
+    else {
+      const dirs = [{ x: 0, y: -1 }, { x: 0, y: 1 }, { x: -1, y: 0 }, { x: 1, y: 0 }];
+      const safeMoves = dirs.filter(dd => {
+        if (dd.x === -d2.x && dd.y === -d2.y) return false;
+        const nx = wrap({ x: head.x + dd.x, y: head.y + dd.y });
+        return !blocked.has(nx.x + ',' + nx.y);
+      });
+      if (safeMoves.length > 0) {
+        let bestDir = safeMoves[0], bestSpace = 0;
+        for (const dd of safeMoves) {
+          const nx = wrap({ x: head.x + dd.x, y: head.y + dd.y });
+          const space = floodCount(nx, blocked, 60);
+          if (space > bestSpace) { bestSpace = space; bestDir = dd; }
+        }
+        d2 = bestDir;
+      }
+    }
+  }
+  function draw() {
+    ctx.fillStyle = '#0f1923';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    ctx.lineWidth = 0.5;
+    for (let i = 0; i <= COLS; i++) { ctx.beginPath(); ctx.moveTo(i * CS, 0); ctx.lineTo(i * CS, ROWS * CS); ctx.stroke(); }
+    for (let i = 0; i <= ROWS; i++) { ctx.beginPath(); ctx.moveTo(0, i * CS); ctx.lineTo(COLS * CS, i * CS); ctx.stroke(); }
+    ctx.strokeStyle = 'rgba(29,158,117,0.2)';
+    ctx.lineWidth = 2; ctx.setLineDash([4, 4]);
+    ctx.strokeRect(1, 1, COLS * CS - 2, ROWS * CS - 2);
+    ctx.setLineDash([]);
+    s1.forEach((seg, i) => {
+      ctx.fillStyle = i === 0 ? '#4ecca3' : '#1D9E75';
+      ctx.beginPath(); ctx.roundRect(seg.x * CS + 1, seg.y * CS + 1, CS - 2, CS - 2, 4); ctx.fill();
+    });
+    s2.forEach((seg, i) => {
+      ctx.fillStyle = i === 0 ? '#f5a623' : '#c47d0e';
+      ctx.beginPath(); ctx.roundRect(seg.x * CS + 1, seg.y * CS + 1, CS - 2, CS - 2, 4); ctx.fill();
+    });
+    ctx.shadowColor = '#ff4444'; ctx.shadowBlur = 10;
+    ctx.fillStyle = '#ff4444';
+    ctx.beginPath(); ctx.arc(food.x * CS + CS / 2, food.y * CS + CS / 2, CS / 2 - 2, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+  function collides(h, snake) { return snake.some(s => s.x === h.x && s.y === h.y); }
+  function step() {
+    if (nd1) { d1 = nd1; nd1 = null; }
+    aiMove();
+    const h1 = wrap({ x: s1[0].x + d1.x, y: s1[0].y + d1.y });
+    const h2 = wrap({ x: s2[0].x + d2.x, y: s2[0].y + d2.y });
+    const dead1 = collides(h1, s1) || collides(h1, s2);
+    const dead2 = collides(h2, s2) || collides(h2, s1);
+    if (dead1 && dead2) { roundOver('draw'); return; }
+    if (dead1) { roundOver('ai'); return; }
+    if (dead2) { roundOver('player'); return; }
+    s1.unshift(h1); s2.unshift(h2);
+    let ate = false;
+    if (h1.x === food.x && h1.y === food.y) { sc1 += 10; ate = true; updateUI(); } else s1.pop();
+    if (h2.x === food.x && h2.y === food.y) { sc2 += 10; ate = true; updateUI(); } else s2.pop();
+    if (ate) placeFood();
+    draw();
+  }
+  function roundOver(winner) {
+    clearInterval(loop); started = false; draw();
+    ctx.fillStyle = 'rgba(0,0,0,0.75)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    let msg = '';
+    if (winner === 'draw') { msg = 'Draw! Dono mare 💀'; }
+    else if (winner === 'player') { sc1 += 20; msg = '🟢 Tum Jeet Gaye! 🎉'; }
+    else { sc2 += 20; msg = '🤖 AI Jeet Gaya!'; }
+    updateUI();
+    ctx.fillStyle = winner === 'player' ? '#4ecca3' : winner === 'ai' ? '#f5a623' : '#fff';
+    ctx.font = 'bold 18px sans-serif'; ctx.fillText(msg, canvas.width / 2, canvas.height / 2 - 18);
+    ctx.font = '13px sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.fillText('Tum: ' + sc1 + '  |  AI: ' + sc2, canvas.width / 2, canvas.height / 2 + 8);
+    ctx.fillText('Start dabao next round ke liye', canvas.width / 2, canvas.height / 2 + 30);
+    document.getElementById('msg').textContent = msg;
+    document.getElementById('startBtn').textContent = '▶ Next Round';
+    document.getElementById('startBtn').disabled = false;
+    document.getElementById('pauseBtn').disabled = true;
+    rnd++;
+  }
+  document.getElementById('startBtn').addEventListener('click', () => {
+    paused = false; started = true;
+    if (document.getElementById('startBtn').textContent.includes('Next')) init();
+    else initGame();
+    draw(); clearInterval(loop); loop = setInterval(step, speed);
+    document.getElementById('startBtn').disabled = true;
+    document.getElementById('pauseBtn').disabled = false;
+    document.getElementById('msg').textContent = 'AI ko block karo!';
+    document.getElementById('startBtn').textContent = '▶ Start';
+  });
+  document.getElementById('pauseBtn').addEventListener('click', () => {
+    if (!started) return;
+    if (paused) { paused = false; loop = setInterval(step, speed); document.getElementById('pauseBtn').textContent = '⏸ Pause'; }
+    else { paused = true; clearInterval(loop); document.getElementById('pauseBtn').textContent = '▶ Resume'; }
+  });
+  document.getElementById('up').addEventListener('click', () => { if (d1.y !== 1) nd1 = { x: 0, y: -1 }; });
+  document.getElementById('down').addEventListener('click', () => { if (d1.y !== -1) nd1 = { x: 0, y: 1 }; });
+  document.getElementById('left').addEventListener('click', () => { if (d1.x !== 1) nd1 = { x: -1, y: 0 }; });
+  document.getElementById('right').addEventListener('click', () => { if (d1.x !== -1) nd1 = { x: 1, y: 0 }; });
+  document.addEventListener('keydown', e => {
+    const arr = { ArrowUp: { x: 0, y: -1 }, ArrowDown: { x: 0, y: 1 }, ArrowLeft: { x: -1, y: 0 }, ArrowRight: { x: 1, y: 0 } };
+    if (arr[e.key]) { e.preventDefault(); const nd = arr[e.key]; if (nd.x !== -d1.x || nd.y !== -d1.y) nd1 = nd; }
+  });
+  let touchStartX, touchStartY;
+  canvas.addEventListener('touchstart', e => { touchStartX = e.touches[0].clientX; touchStartY = e.touches[0].clientY; e.preventDefault(); }, { passive: false });
+  canvas.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    const dy = e.changedTouches[0].clientY - touchStartY;
+    if (Math.abs(dx) > Math.abs(dy)) { const nd = dx > 0 ? { x: 1, y: 0 } : { x: -1, y: 0 }; if (nd.x !== -d1.x) nd1 = nd; }
+    else { const nd = dy > 0 ? { x: 0, y: 1 } : { x: 0, y: -1 }; if (nd.y !== -d1.y) nd1 = nd; }
+    e.preventDefault();
+  }, { passive: false });
+  if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').catch(() => {}); }
+  initGame(); draw();
+  ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#4ecca3'; ctx.font = 'bold 18px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('🐍 SNAKE vs AI 🤖', canvas.width / 2, canvas.height / 2 - 16);
+  ctx.font = '12px sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.6)';
+  ctx.fillText('Wall se guzar sakte ho!', canvas.width / 2, canvas.height / 2 + 10);
+  ctx.fillText('Sirf collision se out!', canvas.width / 2, canvas.height / 2 + 28);
+</script>
+</body>
+</html>
