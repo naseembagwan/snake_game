@@ -2,8 +2,8 @@
   "name": "Snake vs AI",
   "short_name": "Snake AI",
   "description": "Snake vs AI game - Wall se guzro, AI ko harao!",
-  "start_url": "/snake_game/"
-  "display": "standalone",
+  "start_url": "/snake_game/",
+"display": "standalone",
   "background_color": "#0f1923",
   "theme_color": "#1D9E75",
   "orientation": "portrait",
